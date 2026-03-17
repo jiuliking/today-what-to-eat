@@ -7,7 +7,7 @@
 ## 项目截图
 
 <p align="center">
-  <img src="assets/screenshots/preview-combined.jpg" alt="项目截图预览" width="900" />
+  <img src="assets/screenshots/frontend-home.jpg" alt="首页截图" width="900" />
 </p>
 
 ## 功能特性
