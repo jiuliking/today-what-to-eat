@@ -7,8 +7,8 @@
 ## 项目截图
 
 <p align="center">
-  <img src="assets/screenshots/frontend-home.jpg" alt="首页截图" width="62%" />
-  <img src="assets/screenshots/frontend-mobile.jpg" alt="手机端效果" width="30.5%" />
+  <img src="assets/screenshots/frontend-home.jpg" alt="首页截图" width="54%" />
+  <img src="assets/screenshots/frontend-mobile.jpg" alt="手机端效果" width="23%" />
 </p>
 
 ## 功能特性
