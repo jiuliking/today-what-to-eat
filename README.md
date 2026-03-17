@@ -215,10 +215,68 @@ docker compose logs -f
 docker compose down
 ```
 
+### 后续更新
+
+如果仓库有新提交，进入项目目录后执行：
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+一条命令也可以：
+
+```bash
+git pull && docker compose up -d --build
+```
+
+更新后建议检查：
+
+```bash
+docker compose ps
+docker compose logs --tail=100
+```
+
+如果 `git pull` 提示有本地改动，可以先查看：
+
+```bash
+git status
+```
+
+如果你确认要以 GitHub 最新版本为准，可以强制同步：
+
+```bash
+git fetch origin
+git reset --hard origin/main
+docker compose up -d --build
+```
+
+> 注意：`git reset --hard origin/main` 会丢弃服务器上的本地改动。
+
 访问：
 
 - 前台：`http://服务器IP:8000`
 - 后台：`http://服务器IP:8000/admin`
+
+### 1Panel / 面板场景补充
+
+如果你是通过 1Panel 管理这个项目，常见更新方式有两种：
+
+#### 方式一：SSH 进服务器更新（推荐）
+
+```bash
+cd today-what-to-eat
+git pull
+docker compose up -d --build
+```
+
+#### 方式二：面板里重建
+
+1. 先通过 SSH 或终端进入项目目录执行 `git pull`
+2. 回到 1Panel
+3. 对对应的 Compose 项目执行“重建 / 重新创建 / 重启”
+
+这样就能把 GitHub 上的新代码更新到线上。
 
 ### 方式二：原生 Docker
 
