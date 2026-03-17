@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card login-card">
+  <h1>后台登录</h1>
+  <p class="muted">默认密码来自环境变量 <code>ADMIN_PASSWORD</code>。</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post" action="/admin/login" class="stack-form">
+    <input type="password" name="password" placeholder="输入后台密码" required />
+    <button type="submit">进入后台</button>
+  </form>
+</section>
+{% endblock %}

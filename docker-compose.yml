@@ -1,0 +1,13 @@
+services:
+  lunch-decider:
+    build: .
+    container_name: lunch-decider
+    ports:
+      - "8000:8000"
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      SECRET_KEY: ${SECRET_KEY:-change-me-please}
+      DATABASE_URL: sqlite:////app/data/data.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

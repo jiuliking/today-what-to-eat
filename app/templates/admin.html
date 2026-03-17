@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="admin-header card">
+  <div>
+    <p class="eyebrow">后台管理</p>
+    <h1>管理食堂、菜品和权重</h1>
+    <p class="muted">权重范围 1-20，越高越容易被随机到。</p>
+  </div>
+  <form method="post" action="/admin/logout">
+    <button class="secondary" type="submit">退出登录</button>
+  </form>
+</section>
+
+<section class="card list-card">
+  <h2>前台显示设置</h2>
+  <form method="post" action="/admin/settings" class="settings-form">
+    <div class="settings-group settings-inline-row">
+      <label class="toggle-row">
+        <input type="checkbox" name="show_weights_frontend" {% if show_weights_frontend %}checked{% endif %} />
+        <span>前台显示权重</span>
+      </label>
+    </div>
+
+    <div class="settings-group">
+      <label class="toggle-row">
+        <input type="checkbox" name="hero_line1_enabled" {% if ui_settings.hero_line1_enabled == 'true' %}checked{% endif %} />
+        <span>显示顶部文案 1</span>
+      </label>
+      <input type="text" name="hero_line1_text" value="{{ ui_settings.hero_line1_text }}" placeholder="顶部文案 1" />
+    </div>
+
+    <div class="settings-group">
+      <label class="toggle-row">
+        <input type="checkbox" name="hero_line2_enabled" {% if ui_settings.hero_line2_enabled == 'true' %}checked{% endif %} />
+        <span>显示顶部文案 2</span>
+      </label>
+      <input type="text" name="hero_line2_text" value="{{ ui_settings.hero_line2_text }}" placeholder="顶部文案 2" />
+    </div>
+
+    <div class="settings-group">
+      <label class="toggle-row">
+        <input type="checkbox" name="hero_line3_enabled" {% if ui_settings.hero_line3_enabled == 'true' %}checked{% endif %} />
+        <span>显示顶部文案 3</span>
+      </label>
+      <input type="text" name="hero_line3_text" value="{{ ui_settings.hero_line3_text }}" placeholder="顶部文案 3" />
+    </div>
+
+    <button type="submit">保存设置</button>
+  </form>
+</section>
+
+<section class="admin-grid">
+  <div class="card">
+    <h2>新增食堂</h2>
+    <form method="post" action="/admin/canteens" class="stack-form">
+      <input name="name" placeholder="食堂名称" required />
+      <input name="description" placeholder="描述，比如离宿舍近，可留空" />
+      <select name="distance_level" required>
+        <option value="near">近</option>
+        <option value="medium" selected>中</option>
+        <option value="far">远</option>
+      </select>
+      <input type="number" name="weight" min="1" max="20" value="10" placeholder="权重 1-20" required />
+      <button type="submit">添加食堂</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>新增菜品</h2>
+    <form method="post" action="/admin/dishes" class="stack-form">
+      <input name="name" placeholder="菜品" required />
+      <input name="note" placeholder="备注，比如辣/清淡，可留空" />
+      <select name="canteen_id" required>
+        {% for canteen in canteens %}
+        <option value="{{ canteen.id }}">{{ canteen.name }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" name="weight" min="1" max="20" value="10" placeholder="权重 1-20" required />
+      <button type="submit">添加菜品</button>
+    </form>
+  </div>
+</section>
+
+<section class="card list-card">
+  <h2>食堂列表</h2>
+  {% for canteen in canteens %}
+  <form method="post" action="/admin/canteens/{{ canteen.id }}/update" class="inline-form canteen-form">
+    <input name="name" value="{{ canteen.name }}" placeholder="食堂名称" required />
+    <input name="description" value="{{ canteen.description }}" placeholder="描述，比如离宿舍近，可留空" />
+    <select name="distance_level" required>
+      {% for distance_key, distance_label in distance_labels.items() %}
+      <option value="{{ distance_key }}" {% if distance_key == canteen.distance_level %}selected{% endif %}>{{ distance_label }}</option>
+      {% endfor %}
+    </select>
+    <input type="number" name="weight" min="1" max="20" value="{{ canteen.weight }}" placeholder="权重 1-20" required />
+    <button type="submit">保存</button>
+  </form>
+  <form method="post" action="/admin/canteens/{{ canteen.id }}/delete" class="danger-row" onsubmit="return confirm('确定删除这个食堂及其全部菜品？')">
+    <button class="danger" type="submit">删除 {{ canteen.name }}</button>
+  </form>
+  {% endfor %}
+</section>
+
+<section class="card list-card">
+  <h2>菜品列表</h2>
+  {% for dish in dishes %}
+  <form method="post" action="/admin/dishes/{{ dish.id }}/update" class="inline-form dish-form">
+    <input name="name" value="{{ dish.name }}" placeholder="菜品" required />
+    <input name="note" value="{{ dish.note }}" placeholder="备注，比如辣/清淡，可留空" />
+    <select name="canteen_id" required>
+      {% for canteen in canteens %}
+      <option value="{{ canteen.id }}" {% if canteen.id == dish.canteen_id %}selected{% endif %}>{{ canteen.name }}</option>
+      {% endfor %}
+    </select>
+    <input type="number" name="weight" min="1" max="20" value="{{ dish.weight }}" placeholder="权重 1-20" required />
+    <button type="submit">保存</button>
+  </form>
+  <form method="post" action="/admin/dishes/{{ dish.id }}/delete" class="danger-row" onsubmit="return confirm('确定删除这个菜品？')">
+    <button class="danger" type="submit">删除 {{ dish.name }}</button>
+  </form>
+  {% endfor %}
+</section>
+{% endblock %}

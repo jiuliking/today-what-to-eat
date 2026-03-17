@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="hero card">
+  <div class="hero-copy">
+    {% if ui_settings.hero_line1_enabled == 'true' and ui_settings.hero_line1_text %}
+      <p class="eyebrow">{{ ui_settings.hero_line1_text }}</p>
+    {% endif %}
+    {% if ui_settings.hero_line2_enabled == 'true' and ui_settings.hero_line2_text %}
+      <h1>{{ ui_settings.hero_line2_text }}</h1>
+    {% endif %}
+    {% if ui_settings.hero_line3_enabled == 'true' and ui_settings.hero_line3_text %}
+      <p class="muted">{{ ui_settings.hero_line3_text }}</p>
+    {% endif %}
+  </div>
+
+  <div class="result-wrap">
+    <div class="result-box {% if not result %}result-box-empty{% endif %}">
+      {% if result %}
+        <span>{{ result.title }}</span>
+        <strong>{{ result.content }}</strong>
+        <small>{{ result.sub }}</small>
+      {% else %}
+        <span>结果</span>
+        <strong>点下面按钮</strong>
+        <small>结果会显示在这里，一眼就能看到</small>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="card picker-card">
+  <form method="post" action="/random" class="stack-form">
+    <div class="mode-picker">
+      <label class="mode-option">
+        <input type="radio" name="mode" value="canteen" {% if selected_mode == 'canteen' %}checked{% endif %} />
+        <span>食堂</span>
+      </label>
+      <label class="mode-option">
+        <input type="radio" name="mode" value="canteen_dish" {% if selected_mode == 'canteen_dish' %}checked{% endif %} />
+        <span>食堂+菜</span>
+      </label>
+      <label class="mode-option">
+        <input type="radio" name="mode" value="dish" {% if selected_mode == 'dish' %}checked{% endif %} />
+        <span>菜品</span>
+      </label>
+    </div>
+
+    <div class="canteen-extra" id="canteen-extra">
+      <div class="direct-picker">
+        <select name="canteen_id">
+          <option value="">不指定</option>
+          {% for canteen in canteens %}
+          <option value="{{ canteen.id }}" {% if selected_canteen_id == (canteen.id|string) %}selected{% endif %}>{{ canteen.name }}{% if show_weights_frontend %}（权重 {{ canteen.weight }}）{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <button type="submit" class="main-pick-btn">帮我选</button>
+  </form>
+</section>
+
+<section class="card list-card">
+  <h3>当前食堂和菜品</h3>
+  <div class="canteen-list">
+    {% for canteen in canteens %}
+    <div class="canteen-item">
+      <strong>
+        {{ canteen.name }}
+        {% if show_weights_frontend %}<span class="weight-tag">权重 {{ canteen.weight }}/20</span>{% endif %}
+        <span class="distance-tag">{{ {'near':'近','medium':'中','far':'远'}[canteen.distance_level] }}</span>
+      </strong>
+      <small>{{ canteen.description }}</small>
+      <ul>
+        {% for dish in canteen.dishes %}
+        <li>
+          {{ dish.name }}
+          {% if show_weights_frontend %}<span class="weight-tag">{{ dish.weight }}/20</span>{% endif %}
+          {% if dish.note %} · {{ dish.note }}{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="scene-fab-wrap">
+  <button type="button" class="scene-fab" id="scene-toggle-btn">场景</button>
+
+  <div class="scene-fab-panel card-subtle" id="scene-panel">
+    <form method="post" action="/random" class="stack-form">
+      <input type="hidden" name="mode" id="scene-mode-hidden" value="{{ selected_mode }}" />
+      <input type="hidden" name="canteen_id" id="scene-canteen-hidden" value="{{ selected_canteen_id }}" />
+      <div class="scene-panel-head">场景偏好：{{ scene_labels[selected_scene] }}</div>
+      <div class="mode-picker scene-mode-picker">
+        {% for scene_key, scene_label in scene_labels.items() %}
+        <label class="mode-option">
+          <input type="radio" name="scene" value="{{ scene_key }}" {% if selected_scene == scene_key %}checked{% endif %} />
+          <span>{{ scene_label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <button type="submit" class="secondary">应用场景</button>
+    </form>
+  </div>
+</section>
+
+<script>
+  (function () {
+    const radios = document.querySelectorAll('input[name="mode"]');
+    const extra = document.getElementById('canteen-extra');
+    const sceneToggleBtn = document.getElementById('scene-toggle-btn');
+    const scenePanel = document.getElementById('scene-panel');
+    const sceneModeHidden = document.getElementById('scene-mode-hidden');
+    const sceneCanteenHidden = document.getElementById('scene-canteen-hidden');
+    const canteenSelect = document.querySelector('select[name="canteen_id"]');
+
+    function syncExtra() {
+      const selected = document.querySelector('input[name="mode"]:checked');
+      if (!extra || !selected) return;
+      extra.style.display = selected.value === 'canteen_dish' ? 'block' : 'none';
+      if (sceneModeHidden) sceneModeHidden.value = selected.value;
+      if (sceneCanteenHidden && canteenSelect) sceneCanteenHidden.value = canteenSelect.value || '';
+    }
+
+    if (canteenSelect) {
+      canteenSelect.addEventListener('change', function () {
+        if (sceneCanteenHidden) sceneCanteenHidden.value = canteenSelect.value || '';
+      });
+    }
+
+    if (sceneToggleBtn && scenePanel) {
+      sceneToggleBtn.addEventListener('click', function () {
+        scenePanel.classList.toggle('open');
+      });
+    }
+
+    radios.forEach((radio) => radio.addEventListener('change', syncExtra));
+    syncExtra();
+  })();
+</script>
+{% endblock %}
