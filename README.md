@@ -6,16 +6,9 @@
 
 ## 项目截图
 
-### 首页
-
-<p>
-  <img src="assets/screenshots/frontend-home.jpg" alt="首页截图" width="820" />
-</p>
-
-### 手机端效果
-
-<p>
-  <img src="assets/screenshots/frontend-mobile.jpg" alt="手机端效果" width="360" />
+<p align="center">
+  <img src="assets/screenshots/frontend-home.jpg" alt="首页截图" width="62%" />
+  <img src="assets/screenshots/frontend-mobile.jpg" alt="手机端效果" width="30.5%" />
 </p>
 
 ## 功能特性
