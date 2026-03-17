@@ -14,22 +14,18 @@
   </div>
 
   <div class="result-wrap">
-    <div class="result-box {% if not result %}result-box-empty{% endif %}">
-      {% if result %}
-        <span>{{ result.title }}</span>
-        <strong>{{ result.content }}</strong>
-        <small>{{ result.sub }}</small>
-      {% else %}
-        <span>结果</span>
-        <strong>点下面按钮</strong>
-        <small>结果会显示在这里，一眼就能看到</small>
-      {% endif %}
+    <div class="result-box {% if not result %}result-box-empty{% endif %}" id="result-box">
+      <span id="result-title">{{ result.title if result else '结果' }}</span>
+      <strong id="result-content">{{ result.content if result else '点下面按钮' }}</strong>
+      <small id="result-sub">{{ result.sub if result else '结果会显示在这里，一眼就能看到' }}</small>
     </div>
   </div>
 </section>
 
 <section class="card picker-card">
-  <form method="post" action="/random" class="stack-form">
+  <form method="post" action="/random" class="stack-form" id="pick-form">
+    <input type="hidden" name="scene" id="pick-scene-hidden" value="{{ selected_scene }}" />
+
     <div class="mode-picker">
       <label class="mode-option">
         <input type="radio" name="mode" value="canteen" {% if selected_mode == 'canteen' %}checked{% endif %} />
@@ -56,7 +52,7 @@
       </div>
     </div>
 
-    <button type="submit" class="main-pick-btn">帮我选</button>
+    <button type="submit" class="main-pick-btn" id="pick-btn">帮我选</button>
   </form>
 </section>
 
@@ -108,6 +104,7 @@
 
 <script>
   (function () {
+    const pickerData = {{ picker_data | tojson }};
     const radios = document.querySelectorAll('input[name="mode"]');
     const extra = document.getElementById('canteen-extra');
     const sceneToggleBtn = document.getElementById('scene-toggle-btn');
@@ -115,13 +112,138 @@
     const sceneModeHidden = document.getElementById('scene-mode-hidden');
     const sceneCanteenHidden = document.getElementById('scene-canteen-hidden');
     const canteenSelect = document.querySelector('select[name="canteen_id"]');
+    const pickSceneHidden = document.getElementById('pick-scene-hidden');
+    const sceneRadios = document.querySelectorAll('input[name="scene"]');
+    const pickForm = document.getElementById('pick-form');
+    const pickBtn = document.getElementById('pick-btn');
+    const resultBox = document.getElementById('result-box');
+    const resultTitle = document.getElementById('result-title');
+    const resultContent = document.getElementById('result-content');
+    const resultSub = document.getElementById('result-sub');
+    let isPicking = false;
+
+    function currentMode() {
+      const selected = document.querySelector('input[name="mode"]:checked');
+      return selected ? selected.value : 'canteen';
+    }
+
+    function currentScene() {
+      const selected = document.querySelector('input[name="scene"]:checked');
+      return selected ? selected.value : (pickSceneHidden ? pickSceneHidden.value : 'default');
+    }
 
     function syncExtra() {
-      const selected = document.querySelector('input[name="mode"]:checked');
-      if (!extra || !selected) return;
-      extra.style.display = selected.value === 'canteen_dish' ? 'block' : 'none';
-      if (sceneModeHidden) sceneModeHidden.value = selected.value;
+      const mode = currentMode();
+      if (extra) extra.style.display = mode === 'canteen_dish' ? 'block' : 'none';
+      if (sceneModeHidden) sceneModeHidden.value = mode;
       if (sceneCanteenHidden && canteenSelect) sceneCanteenHidden.value = canteenSelect.value || '';
+      if (pickSceneHidden) pickSceneHidden.value = currentScene();
+    }
+
+    function syncScene() {
+      if (pickSceneHidden) pickSceneHidden.value = currentScene();
+    }
+
+    function animationPool(mode, selectedCanteenId) {
+      if (mode === 'canteen') {
+        return pickerData.map((item) => ({ title: '食堂', content: item.name, sub: '正在帮你抽食堂...' }));
+      }
+      if (mode === 'canteen_dish') {
+        const target = selectedCanteenId ? pickerData.find((item) => String(item.id) === String(selectedCanteenId)) : null;
+        if (target && target.dishes.length) {
+          return target.dishes.map((dish) => ({ title: '食堂+菜', content: `${target.name} · ${dish.name}`, sub: '正在从指定食堂里挑菜...' }));
+        }
+        return pickerData.flatMap((item) => item.dishes.map((dish) => ({ title: '食堂+菜', content: `${item.name} · ${dish.name}`, sub: '正在随机搭配食堂和菜...' })));
+      }
+      return pickerData.flatMap((item) => item.dishes.map((dish) => ({ title: '菜品', content: dish.name, sub: `正在全局挑菜 · 来自 ${item.name}` })));
+    }
+
+    function setResultView(data, animating) {
+      resultTitle.textContent = data.title || '结果';
+      resultContent.textContent = data.content || '点下面按钮';
+      resultSub.textContent = data.sub || '';
+      if (animating) {
+        resultBox.classList.add('result-box-animating');
+      } else {
+        resultBox.classList.remove('result-box-empty');
+        resultBox.classList.remove('result-box-animating');
+        resultBox.classList.add('result-box-final');
+      }
+    }
+
+    async function handlePickSubmit(event) {
+      event.preventDefault();
+      if (isPicking) return;
+      isPicking = true;
+      syncExtra();
+      syncScene();
+
+      const mode = currentMode();
+      const selectedCanteenId = canteenSelect ? canteenSelect.value : '';
+      const pool = animationPool(mode, selectedCanteenId).filter((item) => item.content);
+      const formData = new FormData(pickForm);
+      const startedAt = Date.now();
+      let animationStopped = false;
+      let frame = 0;
+      let resultPayload = null;
+
+      function stopAnimation(finalResult) {
+        if (animationStopped) return;
+        animationStopped = true;
+        setResultView(finalResult || {}, false);
+        if (pickSceneHidden && resultPayload && resultPayload.selected_scene) {
+          pickSceneHidden.value = resultPayload.selected_scene;
+        }
+        pickBtn.disabled = false;
+        pickBtn.textContent = '帮我选';
+        isPicking = false;
+      }
+
+      function runDeceleratingAnimation(finalize) {
+        if (!pool.length) {
+          finalize();
+          return;
+        }
+        const steps = [70, 85, 100, 120, 145, 175, 210];
+        const minDuration = 900;
+
+        function tick(index) {
+          if (index >= steps.length && Date.now() - startedAt >= minDuration) {
+            finalize();
+            return;
+          }
+          frame += 1;
+          const next = pool[frame % pool.length];
+          setResultView(next, true);
+          const delay = steps[Math.min(index, steps.length - 1)];
+          window.setTimeout(() => tick(index + 1), delay);
+        }
+
+        setResultView(pool[0], true);
+        window.setTimeout(() => tick(0), steps[0]);
+      }
+
+      pickBtn.disabled = true;
+      pickBtn.textContent = '正在帮你选...';
+
+      try {
+        const response = await fetch('/api/random', {
+          method: 'POST',
+          body: formData,
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (!response.ok) throw new Error('random failed');
+        const data = await response.json();
+        resultPayload = data;
+        runDeceleratingAnimation(() => stopAnimation(data.result || {}));
+      } catch (error) {
+        if (!animationStopped) {
+          pickBtn.disabled = false;
+          pickBtn.textContent = '帮我选';
+          isPicking = false;
+        }
+        pickForm.submit();
+      }
     }
 
     if (canteenSelect) {
@@ -136,8 +258,11 @@
       });
     }
 
+    sceneRadios.forEach((radio) => radio.addEventListener('change', syncScene));
     radios.forEach((radio) => radio.addEventListener('change', syncExtra));
+    if (pickForm) pickForm.addEventListener('submit', handlePickSubmit);
     syncExtra();
+    syncScene();
   })();
 </script>
 {% endblock %}

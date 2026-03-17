@@ -257,6 +257,18 @@ def admin_success_response(request: Request, message: str):
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 
+def build_picker_data(canteens):
+    return [
+        {
+            "id": canteen.id,
+            "name": canteen.name,
+            "distance_level": normalize_distance_level(canteen.distance_level),
+            "dishes": [{"id": dish.id, "name": dish.name} for dish in canteen.dishes],
+        }
+        for canteen in canteens
+    ]
+
+
 def render_home(request: Request, canteens, ui_settings, result=None, selected_scene="default", selected_mode="canteen", selected_canteen_id=""):
     return templates.TemplateResponse("index.html", {
         "request": request,
@@ -268,6 +280,7 @@ def render_home(request: Request, canteens, ui_settings, result=None, selected_s
         "selected_mode": selected_mode,
         "selected_canteen_id": str(selected_canteen_id or ""),
         "scene_labels": SCENE_LABELS,
+        "picker_data": build_picker_data(canteens),
     })
 
 
@@ -281,6 +294,79 @@ def home(request: Request):
     return render_home(request, canteens, ui_settings, result=None, selected_scene="default", selected_mode="canteen", selected_canteen_id="")
 
 
+def generate_random_result(db: Session, mode: str, canteen_id: Optional[str], scene: str, ui_settings: dict, canteens):
+    result = {"title": "今天吃什么", "content": "暂无结果", "sub": ""}
+    selected_scene = scene if scene in SCENE_OPTIONS else "default"
+    show_weights_frontend = ui_settings["show_weights_frontend"] == "true"
+    parsed_canteen_id = int(canteen_id) if canteen_id and str(canteen_id).strip() else None
+
+    if mode == "canteen":
+        picked = weighted_pick(
+            canteens,
+            lambda x: x.weight * get_scene_multiplier(selected_scene, x.distance_level),
+        )
+        if picked:
+            sub_parts = [picked.description] if picked.description else []
+            sub_parts.append(f"距离：{DISTANCE_LABELS[normalize_distance_level(picked.distance_level)]}")
+            sub_parts.append(f"场景：{SCENE_LABELS[selected_scene]}")
+            if show_weights_frontend:
+                final_weight = picked.weight * get_scene_multiplier(selected_scene, picked.distance_level)
+                sub_parts.append(f"基础 {picked.weight} × 场景 {get_scene_multiplier(selected_scene, picked.distance_level):.2f} = {final_weight:.2f}")
+            result = {"title": "食堂", "content": picked.name, "sub": " · ".join([s for s in sub_parts if s])}
+    elif mode == "canteen_dish":
+        picked_canteen = None
+        if parsed_canteen_id:
+            picked_canteen = db.get(Canteen, parsed_canteen_id)
+            if picked_canteen:
+                _ = picked_canteen.dishes
+        else:
+            canteens_with_dishes = [c for c in canteens if c.dishes]
+            picked_canteen = weighted_pick(
+                canteens_with_dishes,
+                lambda x: x.weight * get_scene_multiplier(selected_scene, x.distance_level),
+            )
+
+        if picked_canteen and picked_canteen.dishes:
+            picked_dish = weighted_pick(picked_canteen.dishes, lambda x: x.weight)
+            if picked_dish:
+                sub_parts = [f"场景：{SCENE_LABELS[selected_scene]}", f"距离：{DISTANCE_LABELS[normalize_distance_level(picked_canteen.distance_level)]}"]
+                if picked_dish.note:
+                    sub_parts.append(picked_dish.note)
+                if show_weights_frontend:
+                    canteen_final = picked_canteen.weight * get_scene_multiplier(selected_scene, picked_canteen.distance_level)
+                    sub_parts.append(
+                        f"食堂 {picked_canteen.weight} × {get_scene_multiplier(selected_scene, picked_canteen.distance_level):.2f} = {canteen_final:.2f}"
+                    )
+                    sub_parts.append(f"菜品权重 {picked_dish.weight}")
+                result = {
+                    "title": "食堂+菜",
+                    "content": f"{picked_canteen.name} · {picked_dish.name}",
+                    "sub": " · ".join(sub_parts),
+                }
+    elif mode == "dish":
+        dishes = db.scalars(select(Dish).options(selectinload(Dish.canteen)).order_by(Dish.name)).all()
+        picked = weighted_pick(
+            dishes,
+            lambda x: x.weight * get_scene_multiplier(selected_scene, x.canteen.distance_level),
+        )
+        if picked:
+            sub_parts = [
+                f"来自 {picked.canteen.name}",
+                f"场景：{SCENE_LABELS[selected_scene]}",
+                f"距离：{DISTANCE_LABELS[normalize_distance_level(picked.canteen.distance_level)]}",
+            ]
+            if picked.note:
+                sub_parts.append(picked.note)
+            if show_weights_frontend:
+                final_weight = picked.weight * get_scene_multiplier(selected_scene, picked.canteen.distance_level)
+                sub_parts.append(
+                    f"菜品 {picked.weight} × 场景 {get_scene_multiplier(selected_scene, picked.canteen.distance_level):.2f} = {final_weight:.2f}"
+                )
+            result = {"title": "菜品", "content": picked.name, "sub": " · ".join(sub_parts)}
+
+    return result, selected_scene, parsed_canteen_id
+
+
 @app.post("/random", response_class=HTMLResponse)
 def random_pick(
     request: Request,
@@ -288,81 +374,12 @@ def random_pick(
     canteen_id: Optional[str] = Form(default=None),
     scene: str = Form(default="default"),
 ):
-    result = {"title": "今天吃什么", "content": "暂无结果", "sub": ""}
-    selected_scene = scene if scene in SCENE_OPTIONS else "default"
-
     with SessionLocal() as db:
         canteens = db.scalars(
             select(Canteen).options(selectinload(Canteen.dishes)).order_by(Canteen.name)
         ).all()
         ui_settings = load_ui_settings(db)
-        show_weights_frontend = ui_settings["show_weights_frontend"] == "true"
-
-        parsed_canteen_id = int(canteen_id) if canteen_id and canteen_id.strip() else None
-
-        if mode == "canteen":
-            picked = weighted_pick(
-                canteens,
-                lambda x: x.weight * get_scene_multiplier(selected_scene, x.distance_level),
-            )
-            if picked:
-                sub_parts = [picked.description] if picked.description else []
-                sub_parts.append(f"距离：{DISTANCE_LABELS[normalize_distance_level(picked.distance_level)]}")
-                sub_parts.append(f"场景：{SCENE_LABELS[selected_scene]}")
-                if show_weights_frontend:
-                    final_weight = x_weight = picked.weight * get_scene_multiplier(selected_scene, picked.distance_level)
-                    sub_parts.append(f"基础 {picked.weight} × 场景 {get_scene_multiplier(selected_scene, picked.distance_level):.2f} = {final_weight:.2f}")
-                result = {"title": "食堂", "content": picked.name, "sub": " · ".join([s for s in sub_parts if s])}
-        elif mode == "canteen_dish":
-            picked_canteen = None
-            if parsed_canteen_id:
-                picked_canteen = db.get(Canteen, parsed_canteen_id)
-                if picked_canteen:
-                    _ = picked_canteen.dishes
-            else:
-                canteens_with_dishes = [c for c in canteens if c.dishes]
-                picked_canteen = weighted_pick(
-                    canteens_with_dishes,
-                    lambda x: x.weight * get_scene_multiplier(selected_scene, x.distance_level),
-                )
-
-            if picked_canteen and picked_canteen.dishes:
-                picked_dish = weighted_pick(picked_canteen.dishes, lambda x: x.weight)
-                if picked_dish:
-                    sub_parts = [f"场景：{SCENE_LABELS[selected_scene]}", f"距离：{DISTANCE_LABELS[normalize_distance_level(picked_canteen.distance_level)]}"]
-                    if picked_dish.note:
-                        sub_parts.append(picked_dish.note)
-                    if show_weights_frontend:
-                        canteen_final = picked_canteen.weight * get_scene_multiplier(selected_scene, picked_canteen.distance_level)
-                        sub_parts.append(
-                            f"食堂 {picked_canteen.weight} × {get_scene_multiplier(selected_scene, picked_canteen.distance_level):.2f} = {canteen_final:.2f}"
-                        )
-                        sub_parts.append(f"菜品权重 {picked_dish.weight}")
-                    result = {
-                        "title": "食堂+菜",
-                        "content": f"{picked_canteen.name} · {picked_dish.name}",
-                        "sub": " · ".join(sub_parts),
-                    }
-        elif mode == "dish":
-            dishes = db.scalars(select(Dish).options(selectinload(Dish.canteen)).order_by(Dish.name)).all()
-            picked = weighted_pick(
-                dishes,
-                lambda x: x.weight * get_scene_multiplier(selected_scene, x.canteen.distance_level),
-            )
-            if picked:
-                sub_parts = [
-                    f"来自 {picked.canteen.name}",
-                    f"场景：{SCENE_LABELS[selected_scene]}",
-                    f"距离：{DISTANCE_LABELS[normalize_distance_level(picked.canteen.distance_level)]}",
-                ]
-                if picked.note:
-                    sub_parts.append(picked.note)
-                if show_weights_frontend:
-                    final_weight = picked.weight * get_scene_multiplier(selected_scene, picked.canteen.distance_level)
-                    sub_parts.append(
-                        f"菜品 {picked.weight} × 场景 {get_scene_multiplier(selected_scene, picked.canteen.distance_level):.2f} = {final_weight:.2f}"
-                    )
-                result = {"title": "菜品", "content": picked.name, "sub": " · ".join(sub_parts)}
+        result, selected_scene, parsed_canteen_id = generate_random_result(db, mode, canteen_id, scene, ui_settings, canteens)
 
     return render_home(
         request,
@@ -373,6 +390,28 @@ def random_pick(
         selected_mode=mode,
         selected_canteen_id=parsed_canteen_id or "",
     )
+
+
+@app.post("/api/random")
+def random_pick_api(
+    request: Request,
+    mode: str = Form(...),
+    canteen_id: Optional[str] = Form(default=None),
+    scene: str = Form(default="default"),
+):
+    with SessionLocal() as db:
+        canteens = db.scalars(
+            select(Canteen).options(selectinload(Canteen.dishes)).order_by(Canteen.name)
+        ).all()
+        ui_settings = load_ui_settings(db)
+        result, selected_scene, parsed_canteen_id = generate_random_result(db, mode, canteen_id, scene, ui_settings, canteens)
+    return JSONResponse({
+        "ok": True,
+        "result": result,
+        "selected_scene": selected_scene,
+        "selected_mode": mode,
+        "selected_canteen_id": parsed_canteen_id or "",
+    })
 
 
 @app.get("/admin/login", response_class=HTMLResponse)
