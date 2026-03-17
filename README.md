@@ -4,6 +4,16 @@
 
 适合宿舍、办公室、校园食堂、常吃外卖店等场景。
 
+## 项目截图
+
+### 首页
+
+![首页截图](assets/screenshots/frontend-home.jpg)
+
+### 手机端效果
+
+![手机端效果](assets/screenshots/frontend-mobile.jpg)
+
 ## 功能特性
 
 - 手机优先的简洁 UI
