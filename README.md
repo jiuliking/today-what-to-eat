@@ -258,26 +258,6 @@ docker compose up -d --build
 - 前台：`http://服务器IP:8000`
 - 后台：`http://服务器IP:8000/admin`
 
-### 1Panel / 面板场景补充
-
-如果你是通过 1Panel 管理这个项目，常见更新方式有两种：
-
-#### 方式一：SSH 进服务器更新（推荐）
-
-```bash
-cd today-what-to-eat
-git pull
-docker compose up -d --build
-```
-
-#### 方式二：面板里重建
-
-1. 先通过 SSH 或终端进入项目目录执行 `git pull`
-2. 回到 1Panel
-3. 对对应的 Compose 项目执行“重建 / 重新创建 / 重启”
-
-这样就能把 GitHub 上的新代码更新到线上。
-
 ### 方式二：原生 Docker
 
 构建镜像：
