@@ -8,11 +8,15 @@
 
 ### 首页
 
-![首页截图](assets/screenshots/frontend-home.jpg)
+<p>
+  <img src="assets/screenshots/frontend-home.jpg" alt="首页截图" width="820" />
+</p>
 
 ### 手机端效果
 
-![手机端效果](assets/screenshots/frontend-mobile.jpg)
+<p>
+  <img src="assets/screenshots/frontend-mobile.jpg" alt="手机端效果" width="360" />
+</p>
 
 ## 功能特性
 
