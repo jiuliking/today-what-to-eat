@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Form, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from itsdangerous import URLSafeSerializer
@@ -136,6 +136,31 @@ def serialize_scene(scene: str) -> dict:
     return {"key": scene_key, "label": SCENE_LABELS[scene_key]}
 
 
+def build_probability_preview(canteens):
+    palette = ["#ff8c5a", "#ffb36b", "#ffd166", "#7cc6fe", "#72ddc3", "#c3a6ff", "#ff9fb2", "#8bd17c"]
+    previews = []
+    for scene in SCENE_OPTIONS:
+        rows = []
+        total = 0.0
+        for idx, canteen in enumerate(canteens):
+            multiplier = get_scene_multiplier(scene, canteen.distance_level)
+            final_weight = canteen.weight * multiplier
+            total += final_weight
+            rows.append({
+                "name": canteen.name,
+                "base_weight": canteen.weight,
+                "distance_label": DISTANCE_LABELS[normalize_distance_level(canteen.distance_level)],
+                "multiplier": multiplier,
+                "final_weight": final_weight,
+                "color": palette[idx % len(palette)],
+            })
+        for row in rows:
+            row["probability"] = (row["final_weight"] / total * 100) if total > 0 else 0
+        rows.sort(key=lambda x: x["probability"], reverse=True)
+        previews.append({"key": scene, "label": SCENE_LABELS[scene], "items": rows})
+    return previews
+
+
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_schema_updates()
@@ -220,6 +245,16 @@ def require_login(request: Request):
     if not is_logged_in(request):
         return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
     return None
+
+
+def is_ajax(request: Request) -> bool:
+    return request.headers.get("x-requested-with", "").lower() == "xmlhttprequest"
+
+
+def admin_success_response(request: Request, message: str):
+    if is_ajax(request):
+        return JSONResponse({"ok": True, "message": message})
+    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 
 def render_home(request: Request, canteens, ui_settings, result=None, selected_scene="default", selected_mode="canteen", selected_canteen_id=""):
@@ -380,6 +415,20 @@ def admin_page(request: Request):
     })
 
 
+@app.get("/admin/probabilities", response_class=HTMLResponse)
+def admin_probabilities(request: Request):
+    login_redirect = require_login(request)
+    if login_redirect:
+        return login_redirect
+    with SessionLocal() as db:
+        canteens = db.scalars(select(Canteen).order_by(Canteen.name)).all()
+        previews = build_probability_preview(canteens)
+    return templates.TemplateResponse("admin_probabilities.html", {
+        "request": request,
+        "previews": previews,
+    })
+
+
 @app.post("/admin/settings")
 def update_settings(
     request: Request,
@@ -403,7 +452,7 @@ def update_settings(
         set_setting(db, "hero_line3_enabled", "true" if hero_line3_enabled == "on" else "false")
         set_setting(db, "hero_line3_text", hero_line3_text.strip())
         db.commit()
-    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    return admin_success_response(request, "设置已保存")
 
 
 @app.post("/admin/canteens")
@@ -427,7 +476,7 @@ def create_canteen(
             )
         )
         db.commit()
-    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    return admin_success_response(request, "食堂已添加")
 
 
 @app.post("/admin/canteens/{canteen_id}/update")
@@ -450,7 +499,7 @@ def update_canteen(
             canteen.weight = clamp_weight(weight)
             canteen.distance_level = normalize_distance_level(distance_level)
             db.commit()
-    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    return admin_success_response(request, "食堂已保存")
 
 
 @app.post("/admin/canteens/{canteen_id}/delete")
@@ -463,7 +512,7 @@ def delete_canteen(request: Request, canteen_id: int):
         if canteen:
             db.delete(canteen)
             db.commit()
-    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    return admin_success_response(request, "食堂已删除")
 
 
 @app.post("/admin/dishes")
@@ -480,7 +529,7 @@ def create_dish(
     with SessionLocal() as db:
         db.add(Dish(name=name.strip(), note=note.strip(), canteen_id=canteen_id, weight=clamp_weight(weight)))
         db.commit()
-    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    return admin_success_response(request, "菜品已添加")
 
 
 @app.post("/admin/dishes/{dish_id}/update")
@@ -503,7 +552,7 @@ def update_dish(
             dish.canteen_id = canteen_id
             dish.weight = clamp_weight(weight)
             db.commit()
-    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    return admin_success_response(request, "菜品已保存")
 
 
 @app.post("/admin/dishes/{dish_id}/delete")
@@ -516,4 +565,4 @@ def delete_dish(request: Request, dish_id: int):
         if dish:
             db.delete(dish)
             db.commit()
-    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    return admin_success_response(request, "菜品已删除")

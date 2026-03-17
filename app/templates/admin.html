@@ -12,8 +12,11 @@
 </section>
 
 <section class="card list-card">
-  <h2>前台显示设置</h2>
-  <form method="post" action="/admin/settings" class="settings-form">
+  <div class="section-head">
+    <h2>前台显示设置</h2>
+    <a href="/admin/probabilities" class="secondary-link">看概率预览</a>
+  </div>
+  <form method="post" action="/admin/settings" class="settings-form ajax-form top-ajax-form" data-refresh="false">
     <div class="settings-group settings-inline-row">
       <label class="toggle-row">
         <input type="checkbox" name="show_weights_frontend" {% if show_weights_frontend %}checked{% endif %} />
@@ -46,13 +49,14 @@
     </div>
 
     <button type="submit">保存设置</button>
+    <span class="inline-status block-status" aria-live="polite"></span>
   </form>
 </section>
 
 <section class="admin-grid">
   <div class="card">
     <h2>新增食堂</h2>
-    <form method="post" action="/admin/canteens" class="stack-form">
+    <form method="post" action="/admin/canteens" class="stack-form ajax-form top-ajax-form" data-refresh="true">
       <input name="name" placeholder="食堂名称" required />
       <input name="description" placeholder="描述，比如离宿舍近，可留空" />
       <select name="distance_level" required>
@@ -62,12 +66,13 @@
       </select>
       <input type="number" name="weight" min="1" max="20" value="10" placeholder="权重 1-20" required />
       <button type="submit">添加食堂</button>
+      <span class="inline-status block-status" aria-live="polite"></span>
     </form>
   </div>
 
   <div class="card">
     <h2>新增菜品</h2>
-    <form method="post" action="/admin/dishes" class="stack-form">
+    <form method="post" action="/admin/dishes" class="stack-form ajax-form top-ajax-form" data-refresh="true">
       <input name="name" placeholder="菜品" required />
       <input name="note" placeholder="备注，比如辣/清淡，可留空" />
       <select name="canteen_id" required>
@@ -77,6 +82,7 @@
       </select>
       <input type="number" name="weight" min="1" max="20" value="10" placeholder="权重 1-20" required />
       <button type="submit">添加菜品</button>
+      <span class="inline-status block-status" aria-live="polite"></span>
     </form>
   </div>
 </section>
@@ -84,40 +90,112 @@
 <section class="card list-card">
   <h2>食堂列表</h2>
   {% for canteen in canteens %}
-  <form method="post" action="/admin/canteens/{{ canteen.id }}/update" class="inline-form canteen-form">
-    <input name="name" value="{{ canteen.name }}" placeholder="食堂名称" required />
-    <input name="description" value="{{ canteen.description }}" placeholder="描述，比如离宿舍近，可留空" />
-    <select name="distance_level" required>
-      {% for distance_key, distance_label in distance_labels.items() %}
-      <option value="{{ distance_key }}" {% if distance_key == canteen.distance_level %}selected{% endif %}>{{ distance_label }}</option>
-      {% endfor %}
-    </select>
-    <input type="number" name="weight" min="1" max="20" value="{{ canteen.weight }}" placeholder="权重 1-20" required />
-    <button type="submit">保存</button>
-  </form>
-  <form method="post" action="/admin/canteens/{{ canteen.id }}/delete" class="danger-row" onsubmit="return confirm('确定删除这个食堂及其全部菜品？')">
-    <button class="danger" type="submit">删除 {{ canteen.name }}</button>
-  </form>
+  <div class="editable-row" id="canteen-{{ canteen.id }}">
+    <form method="post" action="/admin/canteens/{{ canteen.id }}/update" class="inline-form canteen-form ajax-form">
+      <input name="name" value="{{ canteen.name }}" placeholder="食堂名称" required />
+      <input name="description" value="{{ canteen.description }}" placeholder="描述，比如离宿舍近，可留空" />
+      <select name="distance_level" required>
+        {% for distance_key, distance_label in distance_labels.items() %}
+        <option value="{{ distance_key }}" {% if distance_key == canteen.distance_level %}selected{% endif %}>{{ distance_label }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" name="weight" min="1" max="20" value="{{ canteen.weight }}" placeholder="权重 1-20" required />
+      <div class="action-inline">
+        <button type="submit">保存</button>
+        <button class="danger ajax-delete" type="button" data-url="/admin/canteens/{{ canteen.id }}/delete" data-confirm="确定删除这个食堂及其全部菜品？">删除</button>
+      </div>
+      <span class="inline-status" aria-live="polite"></span>
+    </form>
+  </div>
   {% endfor %}
 </section>
 
 <section class="card list-card">
   <h2>菜品列表</h2>
   {% for dish in dishes %}
-  <form method="post" action="/admin/dishes/{{ dish.id }}/update" class="inline-form dish-form">
-    <input name="name" value="{{ dish.name }}" placeholder="菜品" required />
-    <input name="note" value="{{ dish.note }}" placeholder="备注，比如辣/清淡，可留空" />
-    <select name="canteen_id" required>
-      {% for canteen in canteens %}
-      <option value="{{ canteen.id }}" {% if canteen.id == dish.canteen_id %}selected{% endif %}>{{ canteen.name }}</option>
-      {% endfor %}
-    </select>
-    <input type="number" name="weight" min="1" max="20" value="{{ dish.weight }}" placeholder="权重 1-20" required />
-    <button type="submit">保存</button>
-  </form>
-  <form method="post" action="/admin/dishes/{{ dish.id }}/delete" class="danger-row" onsubmit="return confirm('确定删除这个菜品？')">
-    <button class="danger" type="submit">删除 {{ dish.name }}</button>
-  </form>
+  <div class="editable-row" id="dish-{{ dish.id }}">
+    <form method="post" action="/admin/dishes/{{ dish.id }}/update" class="inline-form dish-form ajax-form">
+      <input name="name" value="{{ dish.name }}" placeholder="菜品" required />
+      <input name="note" value="{{ dish.note }}" placeholder="备注，比如辣/清淡，可留空" />
+      <select name="canteen_id" required>
+        {% for canteen in canteens %}
+        <option value="{{ canteen.id }}" {% if canteen.id == dish.canteen_id %}selected{% endif %}>{{ canteen.name }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" name="weight" min="1" max="20" value="{{ dish.weight }}" placeholder="权重 1-20" required />
+      <div class="action-inline">
+        <button type="submit">保存</button>
+        <button class="danger ajax-delete" type="button" data-url="/admin/dishes/{{ dish.id }}/delete" data-confirm="确定删除这个菜品？">删除</button>
+      </div>
+      <span class="inline-status" aria-live="polite"></span>
+    </form>
+  </div>
   {% endfor %}
 </section>
+
+<script>
+  (function () {
+    async function submitAjaxForm(form) {
+      const status = form.querySelector('.inline-status');
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const formData = new FormData(form);
+      const shouldRefresh = form.dataset.refresh === 'true';
+      try {
+        if (status) status.textContent = submitBtn && submitBtn.textContent.includes('添加') ? '提交中...' : '保存中...';
+        if (submitBtn) submitBtn.disabled = true;
+        const res = await fetch(form.action, {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          body: formData,
+        });
+        if (!res.ok) throw new Error('保存失败');
+        const data = await res.json();
+        if (status) status.textContent = data.message || '已保存';
+        if (shouldRefresh) {
+          setTimeout(() => window.location.reload(), 500);
+          return;
+        }
+        setTimeout(() => { if (status) status.textContent = ''; }, 2000);
+      } catch (err) {
+        if (status) status.textContent = '操作失败';
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    }
+
+    async function deleteAjax(button) {
+      const form = button.closest('.ajax-form');
+      const row = button.closest('.editable-row');
+      const status = form ? form.querySelector('.inline-status') : null;
+      const message = button.dataset.confirm || '确定删除？';
+      if (!confirm(message)) return;
+      try {
+        if (status) status.textContent = '删除中...';
+        button.disabled = true;
+        const res = await fetch(button.dataset.url, {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (!res.ok) throw new Error('删除失败');
+        if (row) row.remove();
+      } catch (err) {
+        if (status) status.textContent = '删除失败';
+        button.disabled = false;
+      }
+    }
+
+    document.querySelectorAll('.ajax-form').forEach((form) => {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        submitAjaxForm(form);
+      });
+    });
+
+    document.querySelectorAll('.ajax-delete').forEach((button) => {
+      button.addEventListener('click', function () {
+        deleteAjax(button);
+      });
+    });
+  })();
+</script>
 {% endblock %}

@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="admin-header card">
+  <div>
+    <p class="eyebrow">概率预览</p>
+    <h1>不同场景下的抽中概率</h1>
+    <p class="muted">这里展示的是按当前权重和距离规则计算出来的理论概率，方便你调权重。</p>
+  </div>
+  <a href="/admin" class="secondary-link">返回后台</a>
+</section>
+
+{% for scene in previews %}
+<section class="card list-card">
+  <h2>{{ scene.label }}</h2>
+
+  <div class="chart-block">
+    <canvas class="prob-pie" id="pie-{{ scene.key }}" width="420" height="420"></canvas>
+    <div class="chart-legend">
+      {% for item in scene['items'] %}
+      <div class="legend-item">
+        <span class="legend-dot" style="background: {{ item.color }}"></span>
+        <span>{{ item.name }}</span>
+        <strong>{{ '%.1f'|format(item.probability) }}%</strong>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="prob-grid">
+    {% for item in scene['items'] %}
+    <div class="prob-item">
+      <div class="prob-top">
+        <strong>{{ item.name }}</strong>
+        <span class="prob-badge">{{ '%.1f'|format(item.probability) }}%</span>
+      </div>
+      <div class="prob-bar">
+        <div class="prob-bar-fill" style="width: {{ '%.2f'|format(item.probability) }}%; background: {{ item.color }}"></div>
+      </div>
+      <small>
+        基础权重 {{ item.base_weight }} · 距离 {{ item.distance_label }} · 场景系数 {{ '%.2f'|format(item.multiplier) }} · 最终权重 {{ '%.2f'|format(item.final_weight) }}
+      </small>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+
+<script>
+  (function () {
+    const scenes = {{ previews | tojson }};
+
+    function drawPie(canvasId, items) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const r = 115;
+      const innerR = 52;
+      const labelR = 145;
+      const lineR = 128;
+      let start = -Math.PI / 2;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = '12px sans-serif';
+      ctx.textBaseline = 'middle';
+
+      items.forEach((item) => {
+        const angle = (item.probability / 100) * Math.PI * 2;
+        const end = start + angle;
+
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, r, start, end);
+        ctx.closePath();
+        ctx.fillStyle = item.color;
+        ctx.fill();
+
+        const mid = start + angle / 2;
+        const sx = cx + Math.cos(mid) * lineR;
+        const sy = cy + Math.sin(mid) * lineR;
+        const ex = cx + Math.cos(mid) * labelR;
+        const ey = cy + Math.sin(mid) * labelR;
+        const rightSide = Math.cos(mid) >= 0;
+        const hx = ex + (rightSide ? 16 : -16);
+
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.lineTo(hx, ey);
+        ctx.strokeStyle = item.color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#2f241d';
+        ctx.textAlign = rightSide ? 'left' : 'right';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(item.name, hx + (rightSide ? 4 : -4), ey - 8);
+        ctx.font = '11px sans-serif';
+        ctx.fillText(`${item.probability.toFixed(1)}%`, hx + (rightSide ? 4 : -4), ey + 9);
+
+        start = end;
+      });
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
+      ctx.fillStyle = '#fffaf5';
+      ctx.fill();
+
+      ctx.fillStyle = '#7d6655';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText('概率', cx, cy - 4);
+      ctx.font = '13px sans-serif';
+      ctx.fillText('预览', cx, cy + 18);
+    }
+
+    scenes.forEach((scene) => drawPie(`pie-${scene.key}`, scene.items));
+  })();
+</script>
+{% endblock %}
